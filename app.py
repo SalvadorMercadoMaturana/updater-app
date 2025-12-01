@@ -12,7 +12,7 @@ st.title("Actualizador de Procesos")
 # ============================
 # PROTECCIÓN CON CONTRASEÑA
 # ============================
-PASSWORD = "RipleyRiesgos"   # contraseña pedida
+PASSWORD = "RipleyRiesgos"
 
 if "auth" not in st.session_state:
     st.session_state["auth"] = False
@@ -26,8 +26,8 @@ if not st.session_state["auth"]:
         st.stop()
 
 st.write("""
-Sube el archivo Excel **con datos reales**: la app mantiene todas las hojas, macros,
-formatos y estilos del archivo, y modifica **solo la fila seleccionada**.
+Sube el archivo Excel real. La app mantiene TODAS las hojas, macros y formatos,
+y solo edita la fila seleccionada dentro de la hoja MAPA_ACTUAL_JUL_2025.
 """)
 
 # ===========================================================
@@ -38,13 +38,20 @@ uploaded = st.file_uploader("Sube el archivo Excel (hoja: MAPA_ACTUAL_JUL_2025)"
 if not uploaded:
     st.stop()
 
+# ========= MUY IMPORTANTE =========
+# Guardamos una copia ORIGINAL del archivo en memoria
+# antes de consumirlo con pandas
+# =================================
+original_bytes = uploaded.getvalue()
+buffer_for_pandas = io.BytesIO(original_bytes)
+
+# Ahora pandas puede leer normalmente
 try:
-    df = pd.read_excel(uploaded, sheet_name="MAPA_ACTUAL_JUL_2025")
+    df = pd.read_excel(buffer_for_pandas, sheet_name="MAPA_ACTUAL_JUL_2025")
 except Exception as e:
     st.error("Error al cargar la hoja MAPA_ACTUAL_JUL_2025: " + str(e))
     st.stop()
 
-# Normalizar columnas
 df.columns = df.columns.str.strip()
 
 # Columnas clave
@@ -65,25 +72,21 @@ COL_FECHA = "FECHA LEVANTAMIENTO / PROGRAMADO"
 # ===========================================================
 st.subheader("🔎 Selecciona el proceso a modificar")
 
-# 1. Tipo de Proceso
 tipos = df[COL_TIPO].dropna().unique()
 tipo_sel = st.selectbox("Tipo de Proceso", tipos)
 
 df1 = df[df[COL_TIPO] == tipo_sel]
 
-# 2. Macroproceso
 macros = df1[COL_MACRO].dropna().unique()
 macro_sel = st.selectbox("Macroproceso", macros)
 
 df2 = df1[df1[COL_MACRO] == macro_sel]
 
-# 3. Proceso
 procesos = df2[COL_PROCESO].dropna().unique()
 proc_sel = st.selectbox("Proceso (Final)", procesos)
 
 df3 = df2[df2[COL_PROCESO] == proc_sel]
 
-# 4. Subproceso
 subs = df3[COL_SUB].dropna().unique()
 sub_sel = st.selectbox("Subproceso (Final)", subs)
 
@@ -107,7 +110,6 @@ with st.form("form_edit"):
     comentarios = st.text_area("Comentarios", row[COL_COM])
     area = st.text_input("Área Responsable", row[COL_AREA])
     responsable = st.text_input("Responsable", row[COL_RESP])
-
     estado = st.selectbox(
         "Estado",
         ["EN PROCESO", "FINALIZADO"],
@@ -119,38 +121,33 @@ with st.form("form_edit"):
     submit = st.form_submit_button("Aplicar Cambios")
 
 # ===========================================================
-# APLICAR MODIFICACIONES EN EL ARCHIVO REAL (CON FORMATO)
+# APLICAR MODIFICACIONES EN EL EXCEL ORIGINAL
 # ===========================================================
 if submit:
-
-    # Paso 1: cargar archivo original en memoria
-    buffer_in = io.BytesIO(uploaded.read())
-    wb = load_workbook(buffer_in, keep_vba=True)  # mantiene macros y formatos
+    # Cargar el Excel original desde los bytes guardados
+    wb = load_workbook(io.BytesIO(original_bytes), keep_vba=True)
     ws = wb["MAPA_ACTUAL_JUL_2025"]
 
-    # Paso 2: localizar fila en Excel (pandas 0-based + header)
-    excel_row = idx + 2
+    excel_row = idx + 2  # pandas 0-based + header
 
-    # Paso 3: mapa de columnas (posición)
     columnas = list(df.columns)
-    map_vals = {
+
+    cambios = {
         COL_COM: comentarios,
         COL_AREA: area,
         COL_RESP: responsable,
-        COL_EST: estado
+        COL_EST: estado,
     }
 
-    # Paso 4: escribir SOLO las celdas editables
-    for col_name, new_val in map_vals.items():
-        col_index = columnas.index(col_name) + 1  # +1 porque Excel usa 1-based
-        ws.cell(row=excel_row, column=col_index).value = new_val
+    for col_name, new_val in cambios.items():
+        col_idx = columnas.index(col_name) + 1
+        ws.cell(row=excel_row, column=col_idx).value = new_val
 
-    # Paso 5: guardar libro completo sin perder nada
     buffer_out = io.BytesIO()
     wb.save(buffer_out)
     buffer_out.seek(0)
 
-    st.success("✔ Cambios aplicados correctamente (libro completo preservado).")
+    st.success("✔ Cambios aplicados correctamente (libro COMPLETO preservado).")
 
     st.download_button(
         "📥 Descargar Excel Actualizado",
