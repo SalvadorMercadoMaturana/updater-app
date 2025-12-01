@@ -6,7 +6,23 @@ import io
 # CONFIGURACIÓN DE LA APP
 # ===========================================================
 st.set_page_config(page_title="Actualizador de Procesos", layout="centered")
-st.title("📝 Actualizador de Procesos (Versión Web Simple)")
+st.title("Actualizador de Procesos")
+
+# ============================
+# PROTECCIÓN CON CONTRASEÑA
+# ============================
+PASSWORD = "R1p13y2025"   # cámbiala
+
+if "auth" not in st.session_state:
+    st.session_state["auth"] = False
+
+if not st.session_state["auth"]:
+    pwd = st.text_input("Ingrese contraseña para acceder:", type="password")
+    if pwd == PASSWORD:
+        st.session_state["auth"] = True
+        st.success("Acceso concedido")
+    else:
+        st.stop()
 
 st.write("""
 Sube el archivo Excel **sin datos sensibles** (solo para pruebas internas)
@@ -24,7 +40,7 @@ if not uploaded:
 try:
     df = pd.read_excel(uploaded, sheet_name="MAPA_ACTUAL_JUL_2025")
 except Exception as e:
-    st.error("❌ Error al cargar la hoja MAPA_ACTUAL_JUL_2025: " + str(e))
+    st.error("Error al cargar la hoja MAPA_ACTUAL_JUL_2025: " + str(e))
     st.stop()
 
 # Normalizar columnas
@@ -34,7 +50,7 @@ df.columns = df.columns.str.strip()
 COL_TIPO = "Tipo de Proceso"
 COL_MACRO = "Nivel 0 - Macroproceso"
 COL_PROCESO = "Nivel 1 - Proceso (Final)"
-COL_SUB = "Nivel 2 - Subproceso (Final)"
+COL_SUB = "Nivel 2 -Subproceso (Final)"
 
 # Columnas editables
 COL_COM = "COMENTARIOS"
@@ -73,7 +89,7 @@ sub_sel = st.selectbox("Subproceso (Final)", subs)
 df_target = df3[df3[COL_SUB] == sub_sel]
 
 if len(df_target) != 1:
-    st.error("❌ La combinación no corresponde a una fila única.")
+    st.error("La combinación no corresponde a una fila única.")
     st.stop()
 
 idx = df_target.index[0]
@@ -84,7 +100,7 @@ st.success("✔ Fila encontrada")
 # ===========================================================
 # FORMULARIO PARA EDITAR CAMPOS
 # ===========================================================
-st.subheader("✏️ Editar campos")
+st.subheader("Editar campos")
 
 with st.form("form_edit"):
     comentarios = st.text_area("Comentarios", row[COL_COM])
@@ -99,7 +115,7 @@ with st.form("form_edit"):
 
     st.text_input("Fecha Levantamiento / Programado (NO editable)", str(row[COL_FECHA]), disabled=True)
 
-    submit = st.form_submit_button("✅ Aplicar Cambios")
+    submit = st.form_submit_button("Aplicar Cambios")
 
 # ===========================================================
 # APLICAR MODIFICACIONES
@@ -123,3 +139,4 @@ if submit:
         file_name="procesos_actualizado.xlsx",
         mime="application/vnd.ms-excel"
     )
+
