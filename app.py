@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import io
+from openpyxl import load_workbook
 
 # ===========================================================
 # CONFIGURACIÓN DE LA APP
@@ -11,7 +12,7 @@ st.title("Actualizador de Procesos")
 # ============================
 # PROTECCIÓN CON CONTRASEÑA
 # ============================
-PASSWORD = "R1p13y2025"   # cámbiala
+PASSWORD = "RipleyRiesgos"   # contraseña pedida
 
 if "auth" not in st.session_state:
     st.session_state["auth"] = False
@@ -25,8 +26,8 @@ if not st.session_state["auth"]:
         st.stop()
 
 st.write("""
-Sube el archivo Excel **sin datos sensibles** (solo para pruebas internas)
-y edita los campos de cada proceso usando filtros desplegables.
+Sube el archivo Excel **con datos reales**: la app mantiene todas las hojas, macros,
+formatos y estilos del archivo, y modifica **solo la fila seleccionada**.
 """)
 
 # ===========================================================
@@ -100,7 +101,7 @@ st.success("✔ Fila encontrada")
 # ===========================================================
 # FORMULARIO PARA EDITAR CAMPOS
 # ===========================================================
-st.subheader("Editar campos")
+st.subheader("✏️ Editar campos")
 
 with st.form("form_edit"):
     comentarios = st.text_area("Comentarios", row[COL_COM])
@@ -118,25 +119,42 @@ with st.form("form_edit"):
     submit = st.form_submit_button("Aplicar Cambios")
 
 # ===========================================================
-# APLICAR MODIFICACIONES
+# APLICAR MODIFICACIONES EN EL ARCHIVO REAL (CON FORMATO)
 # ===========================================================
 if submit:
-    df.loc[idx, COL_COM] = comentarios
-    df.loc[idx, COL_AREA] = area
-    df.loc[idx, COL_RESP] = responsable
-    df.loc[idx, COL_EST] = estado
 
-    # Generar Excel modificado
-    buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="MAPA_ACTUAL_JUL_2025")
+    # Paso 1: cargar archivo original en memoria
+    buffer_in = io.BytesIO(uploaded.read())
+    wb = load_workbook(buffer_in, keep_vba=True)  # mantiene macros y formatos
+    ws = wb["MAPA_ACTUAL_JUL_2025"]
 
-    st.success("✔ Cambios aplicados")
+    # Paso 2: localizar fila en Excel (pandas 0-based + header)
+    excel_row = idx + 2
+
+    # Paso 3: mapa de columnas (posición)
+    columnas = list(df.columns)
+    map_vals = {
+        COL_COM: comentarios,
+        COL_AREA: area,
+        COL_RESP: responsable,
+        COL_EST: estado
+    }
+
+    # Paso 4: escribir SOLO las celdas editables
+    for col_name, new_val in map_vals.items():
+        col_index = columnas.index(col_name) + 1  # +1 porque Excel usa 1-based
+        ws.cell(row=excel_row, column=col_index).value = new_val
+
+    # Paso 5: guardar libro completo sin perder nada
+    buffer_out = io.BytesIO()
+    wb.save(buffer_out)
+    buffer_out.seek(0)
+
+    st.success("✔ Cambios aplicados correctamente (libro completo preservado).")
 
     st.download_button(
         "📥 Descargar Excel Actualizado",
-        data=buffer.getvalue(),
-        file_name="procesos_actualizado.xlsx",
+        data=buffer_out,
+        file_name="procesos_actualizado.xlsm" if uploaded.name.endswith(".xlsm") else "procesos_actualizado.xlsx",
         mime="application/vnd.ms-excel"
     )
-
